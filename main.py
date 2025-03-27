@@ -216,6 +216,10 @@ def four_circles(image):
     result = draw_circles(result, bottom_lid, R=255, G=0, B=255)
     return result, pupil_circles, iris_circles, top_lid, bottom_lid
 
+def remove_padding(detected_circles, pad_x=110, pad_y=100):
+    """Odstráni padding zo súradníc kruhov."""
+    adjusted_circles = [[x - pad_x, y - pad_y, r] for x, y, r in detected_circles]
+    return adjusted_circles
 
 def compute_iou(circle1, circle2):
     """Vypočíta Intersection-over-Union (IoU) pre dva kruhy."""
@@ -279,6 +283,7 @@ def evaluate_detection(detected_circles, annotated_circles, iou_threshold=0.75):
     recall = true_positives / (true_positives + false_negatives) if (true_positives + false_negatives) > 0 else 0
     f1_score = (2 * precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
 
+
     return precision, recall, f1_score
 
 annotated = [[132,166,29],[127,162,103],[179,-192,419],[194,390,301]]
@@ -332,12 +337,13 @@ while True:
         top_lid = np.uint16(np.around(top_lid[0, :])).tolist()
         bottom_lid = np.uint16(np.around(bottom_lid[0, :])).tolist()
         detected = [pupil, iris, top_lid, bottom_lid]
+        detected = remove_padding(detected)
         print(f"Detected circles: {detected}")
         print(f"Annotated circles: {annotated}")
         cv2.imshow("Vykreslenie kruznic", result)
         precision, recall, f1_score = evaluate_detection(detected, annotated)
         print(f"Precision: {precision:.2f}, Recall: {recall:.2f}, F1-score: {f1_score:.2f}")
-
+        print(f1_score(detected, annotated))
 
 
 cv2.destroyAllWindows()
