@@ -251,47 +251,69 @@ def compute_iou(circle1, circle2):
 
     return intersection_area / union_area
 
+
 def evaluate_detection(detected_circles, annotated_circles, iou_threshold=0.75):
-    """Vyhodnotí presnosť detekcie kruhov pomocou Precision, Recall a F1-skóre."""
-    detected_circles = np.array(detected_circles)
-    annotated_circles = np.array(annotated_circles)
-
-    if detected_circles.size == 0:
-        print("Žiadne detegované kruhy.")
-        return 0, 0, 0
-
-    if annotated_circles.size == 0:
-        print("Žiadne anotované kruhy.")
-        return 0, 0, 0
-
+    """Vypočíta Precision, Recall a F1-skóre na základe IoU medzi detegovanými a anotovanými kruhmi."""
     true_positives = 0
-    matched_annotations = set()
+    false_positives = 0
+    false_negatives = 0
 
-    # Prechádzame cez všetky detegované kruhy
-    for detected in detected_circles:
-        for j, annotated in enumerate(annotated_circles):
-            iou = compute_iou(detected, annotated)
-            if iou >= iou_threshold and j not in matched_annotations:
-                true_positives += 1
-                matched_annotations.add(j)
-                break  # Jeden detegovaný kruh môže byť spárovaný len s jednou anotáciou
+    matched_annotated = set()
 
-    false_positives = len(detected_circles) - true_positives
-    false_negatives = len(annotated_circles) - len(matched_annotations)
+    for det in detected_circles:
+        best_match = None
+        best_iou = 0.0
 
-    precision = true_positives / (true_positives + false_positives) if (true_positives + false_positives) > 0 else 0
-    recall = true_positives / (true_positives + false_negatives) if (true_positives + false_negatives) > 0 else 0
-    f1_score = (2 * precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
+        for i, ann in enumerate(annotated_circles):
+            if i not in matched_annotated:  # Zabezpečíme, že anotovaný kruh bude použitý len raz
+                iou = compute_iou(det, ann)
+                if iou > best_iou:
+                    best_iou = iou
+                    best_match = i
 
+        if best_match is not None and best_iou >= iou_threshold:
+            true_positives += 1
+            matched_annotated.add(best_match)
+        else:
+            false_positives += 1
+
+    false_negatives = len(annotated_circles) - len(matched_annotated)
+
+    precision = true_positives / (true_positives + false_positives) if (true_positives + false_positives) > 0 else 0.0
+    recall = true_positives / (true_positives + false_negatives) if (true_positives + false_negatives) > 0 else 0.0
+    f1_score = (2 * precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
+
+    print(f"True Positives: {true_positives}")
+    print(f"False Positives: {false_positives}")
+    print(f"False Negatives: {false_negatives}")
 
     return precision, recall, f1_score
+
 
 annotated = [[132,166,29],[127,162,103],[179,-192,419],[194,390,301]]
 image_path = "duhovky/013/L/S1013L01.jpg"
 image = cv2.imread(image_path)
+csv_path = "iris_annotation.csv"
 setup_trackbars()
 update(0)
 
+def load_annotations(csv_path):
+    annotations = {}
+    with open(csv_path, "r") as f:
+        next(f)
+        for line in f:
+            parts = line.strip().split(",")
+            if len(parts) != 13:
+                continue
+            image_path = parts[0]
+            values = list(map(int, parts[1:]))
+            annotations[image_path] = {
+                "pupil": tuple(values[0:3]),
+                "iris": tuple(values[3:6]),
+                "bottom_lid": tuple(values[6:9]),
+                "top_lid": tuple(values[9:12])
+            }
+    return annotations
 
 def hough_circles(img, params):
     """Aplikuje Hough Transformáciu s danými parametrami."""
@@ -341,9 +363,10 @@ while True:
         print(f"Detected circles: {detected}")
         print(f"Annotated circles: {annotated}")
         cv2.imshow("Vykreslenie kruznic", result)
+
+
         precision, recall, f1_score = evaluate_detection(detected, annotated)
         print(f"Precision: {precision:.2f}, Recall: {recall:.2f}, F1-score: {f1_score:.2f}")
-        print(f1_score(detected, annotated))
 
 
 cv2.destroyAllWindows()
